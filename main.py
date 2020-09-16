@@ -182,7 +182,7 @@ def main(dataset_name,
         print(f'set the seed to: {seed}')
         np.random.seed(seed)
         torch.manual_seed(seed)
-        for model_name in ['lr', 'fm', 'afm', 'hofm', 'nfm', 'ipnn', 'opnn', 'wd', 'dcn', 'dfm', 'xdfm', 'afi', 'afn']:
+        for model_name in ['fm', 'afm', 'hofm', 'nfm', 'ipnn', 'opnn', 'wd', 'dcn', 'dfm', 'xdfm', 'afi', 'afn']:
         # for model_name in ['dcan']:
             print(f'model name: {model_name}')
             model = get_model(model_name, dataset).to(device)
