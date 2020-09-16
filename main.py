@@ -182,8 +182,8 @@ def main(dataset_name,
         print(f'set the seed to: {seed}')
         np.random.seed(seed)
         torch.manual_seed(seed)
-        # for model_name in ['lr', 'fm', 'afm', 'hofm', 'nfm', 'ipnn', 'opnn', 'wd', 'dcn', 'dfm', 'xdfm', 'afi', 'afn']:
-        for model_name in ['dcan']:
+        for model_name in ['lr', 'fm', 'afm', 'hofm', 'nfm', 'ipnn', 'opnn', 'wd', 'dcn', 'dfm', 'xdfm', 'afi', 'afn']:
+        # for model_name in ['dcan']:
             print(f'model name: {model_name}')
             model = get_model(model_name, dataset).to(device)
             criterion = torch.nn.BCELoss()
@@ -213,7 +213,7 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', type=float, default=0.001)
     parser.add_argument('--batch_size', type=int, default=4096)
     parser.add_argument('--weight_decay', type=float, default=1e-6)
-    parser.add_argument('--device', default='cuda:0')
+    parser.add_argument('--device', default='cuda:3')
     parser.add_argument('--save_dir', default='checkpoints/avazu')
     args = parser.parse_args()
     main(args.dataset_name,
