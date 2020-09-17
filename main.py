@@ -182,13 +182,13 @@ def main(dataset_name,
         print(f'set the seed to: {seed}')
         np.random.seed(seed)
         torch.manual_seed(seed)
-        for model_name in ['fm', 'afm', 'hofm', 'nfm', 'ipnn', 'opnn', 'wd', 'dcn', 'dfm', 'xdfm', 'afi', 'afn']:
+        for model_name in ['hofm', 'nfm', 'ipnn', 'opnn', 'wd', 'dcn', 'dfm', 'xdfm', 'afi', 'afn']:
         # for model_name in ['dcan']:
             print(f'model name: {model_name}')
             model = get_model(model_name, dataset).to(device)
             criterion = torch.nn.BCELoss()
             optimizer = torch.optim.Adam(params=model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-            early_stopper = EarlyStopper(num_trials=3, save_path=f'{save_dir}/{model_name}.pt')
+            early_stopper = EarlyStopper(num_trials=2, save_path=f'{save_dir}/{model_name}_seed{seed}.pt')
             for epoch_i in range(epoch):
                 train(model, optimizer, train_data_loader, criterion, device)
                 auc, log_loss = test(model, valid_data_loader, device)
