@@ -174,8 +174,8 @@ class FeaturesInteractionDecoderLayer(torch.nn.Module):
         self.num_heads = num_heads
         self.ffn_embed_dim = ffn_embed_dim
         self.normalize_before = normalize_before
-        self.self_attn = self.build_self_attention(embed_dim, num_heads, dropout)
-        self.self_attn_layer_norm = torch.nn.BatchNorm1d(num_fields)
+        # self.self_attn = self.build_self_attention(embed_dim, num_heads, dropout)
+        # self.self_attn_layer_norm = torch.nn.BatchNorm1d(num_fields)
         self.cross_attn = self.build_cross_attention(embed_dim, num_heads, dropout)
         self.cross_attn_layer_norm = torch.nn.BatchNorm1d(num_fields)
         self.dropout = dropout
@@ -201,12 +201,12 @@ class FeaturesInteractionDecoderLayer(torch.nn.Module):
     def build_fc2(self, input_dim, output_dim):
         return torch.nn.Linear(input_dim, output_dim)
 
-    def build_self_attention(self, embed_dim, num_heads, dropout):
-        return MultiheadAttention(
-            embed_dim=embed_dim,
-            num_heads=num_heads,
-            dropout=dropout
-        )
+    # def build_self_attention(self, embed_dim, num_heads, dropout):
+    #     return MultiheadAttention(
+    #         embed_dim=embed_dim,
+    #         num_heads=num_heads,
+    #         dropout=dropout
+    #     )
 
     def build_cross_attention(self, embed_dim, num_heads, dropout):
         return MultiheadAttention(
@@ -231,18 +231,18 @@ class FeaturesInteractionDecoderLayer(torch.nn.Module):
         Returns:
             encoded output of shape `(seq_len, batch, embed_dim)`
         """
-        residual = x
-        if self.normalize_before:
-            x = self.self_attn_layer_norm(x)
+        # residual = x
+        # if self.normalize_before:
+        #     x = self.self_attn_layer_norm(x)
         
-        x, _ = self.self_attn(
-            x, x, x,
-            attn_mask
-        )
-        x = F.dropout(x, p=self.dropout, training=self.training)
-        x = residual + x
-        if not self.normalize_before:
-            x = self.self_attn_layer_norm(x)
+        # x, _ = self.self_attn(
+        #     x, x, x,
+        #     attn_mask
+        # )
+        # x = F.dropout(x, p=self.dropout, training=self.training)
+        # x = residual + x
+        # if not self.normalize_before:
+        #     x = self.self_attn_layer_norm(x)
 
         residual = x
         if self.normalize_before:
