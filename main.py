@@ -183,7 +183,7 @@ def main(dataset_name,
         np.random.seed(seed)
         torch.manual_seed(seed)
         # for model_name in ['hofm', 'nfm', 'ipnn', 'opnn', 'wd', 'dcn', 'dfm', 'xdfm', 'afi', 'afn']:
-        for model_name in ['dcan']:
+        for model_name in ['afi']:
             print(f'model name: {model_name}')
             model = get_model(model_name, dataset).to(device)
             criterion = torch.nn.BCELoss()
