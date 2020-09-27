@@ -100,7 +100,7 @@ def get_model(name, dataset):
     elif name == 'dcan':
         print("Model:Deep Cross Attentional Network Model")
         return DeepCrossAttentionalNetworkModel(
-            field_dims, embed_dim=16, num_heads=4, ffn_embed_dim=64, num_layers=2, mlp_dims=(100, 100), dropout=0.5
+            field_dims, embed_dim=16, attn_embed_dim=64, num_heads=4, ffn_embed_dim=64, num_layers=3, mlp_dims=(100, 100), dropout=0.2
         )
     else:
         raise ValueError('unknown model name: ' + name)
@@ -183,12 +183,12 @@ def main(dataset_name,
         np.random.seed(seed)
         torch.manual_seed(seed)
         # for model_name in ['hofm', 'nfm', 'ipnn', 'opnn', 'wd', 'dcn', 'dfm', 'xdfm', 'afi', 'afn']:
-        for model_name in ['afi']:
+        for model_name in ['dcan']:
             print(f'model name: {model_name}')
             model = get_model(model_name, dataset).to(device)
             criterion = torch.nn.BCELoss()
             optimizer = torch.optim.Adam(params=model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-            early_stopper = EarlyStopper(num_trials=2, save_path=f'{save_dir}/{model_name}_seed{seed}.pt')
+            early_stopper = EarlyStopper(num_trials=3, save_path=f'{save_dir}/{model_name}_seed{seed}.pt')
             for epoch_i in range(epoch):
                 train(model, optimizer, train_data_loader, criterion, device)
                 auc, log_loss = test(model, valid_data_loader, device)
@@ -213,7 +213,7 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', type=float, default=0.001)
     parser.add_argument('--batch_size', type=int, default=4096)
     parser.add_argument('--weight_decay', type=float, default=1e-6)
-    parser.add_argument('--device', default='cuda:3')
+    parser.add_argument('--device', default='cuda:0')
     parser.add_argument('--save_dir', default='checkpoints/avazu')
     args = parser.parse_args()
     main(args.dataset_name,

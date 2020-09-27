@@ -164,6 +164,7 @@ class FeaturesInteractionDecoderLayer(torch.nn.Module):
     tensor2tensor approach can be enabled by setting
     *args.encoder_normalize_before* to ``True``.
 
+
     Args:
         args (argparse.Namespace): parsed command-line arguments
     """
@@ -174,10 +175,10 @@ class FeaturesInteractionDecoderLayer(torch.nn.Module):
         self.num_heads = num_heads
         self.ffn_embed_dim = ffn_embed_dim
         self.normalize_before = normalize_before
-        self.self_attn = self.build_self_attention(embed_dim, num_heads, dropout)
-        self.self_attn_layer_norm = torch.nn.BatchNorm1d(num_fields)
+        # self.self_attn = self.build_self_attention(embed_dim, num_heads, dropout)
+        # self.self_attn_layer_norm = torch.nn.BatchNorm1d(num_fields)
         self.cross_attn = self.build_cross_attention(embed_dim, num_heads, dropout)
-        self.cross_attn_layer_norm = torch.nn.BatchNorm1d(num_fields)
+        self.cross_attn_layer_norm = torch.nn.LayerNorm(embed_dim)
         self.dropout = dropout
         self.activation_fn = get_activation_fn(
             activation=activation_fn
@@ -193,7 +194,7 @@ class FeaturesInteractionDecoderLayer(torch.nn.Module):
             ffn_embed_dim, embed_dim
         )
 
-        self.final_layer_norm = torch.nn.BatchNorm1d(num_fields)
+        self.final_layer_norm = torch.nn.LayerNorm(embed_dim)
 
     def build_fc1(self, input_dim, output_dim):
         return torch.nn.Linear(input_dim, output_dim)
@@ -201,17 +202,17 @@ class FeaturesInteractionDecoderLayer(torch.nn.Module):
     def build_fc2(self, input_dim, output_dim):
         return torch.nn.Linear(input_dim, output_dim)
 
-    def build_self_attention(self, embed_dim, num_heads, dropout):
-        return MultiheadAttention(
-            embed_dim=embed_dim,
-            num_heads=num_heads,
-            dropout=dropout
-        )
+    # def build_self_attention(self, embed_dim, num_heads, dropout):
+    #     return torch.nn.MultiheadAttention(
+    #         embed_dim,
+    #         num_heads,
+    #         dropout=dropout
+    #     )
 
     def build_cross_attention(self, embed_dim, num_heads, dropout):
-        return MultiheadAttention(
-            embed_dim=embed_dim,
-            num_heads=num_heads,
+        return torch.nn.MultiheadAttention(
+            embed_dim,
+            num_heads,
             dropout=dropout
         )
 
@@ -231,18 +232,18 @@ class FeaturesInteractionDecoderLayer(torch.nn.Module):
         Returns:
             encoded output of shape `(seq_len, batch, embed_dim)`
         """
-        residual = x
-        if self.normalize_before:
-            x = self.self_attn_layer_norm(x)
+        # residual = x
+        # if self.normalize_before:
+        #     x = self.self_attn_layer_norm(x)
         
-        x, _ = self.self_attn(
-            x, x, x,
-            attn_mask
-        )
-        x = F.dropout(x, p=self.dropout, training=self.training)
-        x = residual + x
-        if not self.normalize_before:
-            x = self.self_attn_layer_norm(x)
+        # x, _ = self.self_attn(
+        #     x, x, x,
+        #     attn_mask=attn_mask
+        # )
+        # x = F.dropout(x, p=self.dropout, training=self.training)
+        # x = residual + x
+        # if not self.normalize_before:
+        #     x = self.self_attn_layer_norm(x)
 
         residual = x
         if self.normalize_before:
@@ -250,7 +251,7 @@ class FeaturesInteractionDecoderLayer(torch.nn.Module):
         
         x, _ = self.cross_attn(
             x, memory, memory,
-            attn_mask
+            attn_mask=attn_mask
         )
         x = F.dropout(x, p=self.dropout, training=self.training)
         x = residual + x
@@ -273,7 +274,7 @@ class FeaturesInteractionDecoderLayer(torch.nn.Module):
 
 class CrossAttentionNetwork(torch.nn.Module):
 
-    def __init__(self, num_fields, embed_dim, num_heads, ffn_embed_dim, num_layers, dropout, ensemble='stack', activation_fn='relu', normalize_before=True):
+    def __init__(self, num_fields, embed_dim, num_heads, ffn_embed_dim, num_layers, dropout, activation_fn='relu', normalize_before=True):
         super().__init__()
         self.layers = torch.nn.ModuleList([])
         self.layers.extend(
@@ -281,14 +282,9 @@ class CrossAttentionNetwork(torch.nn.Module):
         )
         self.dropout = dropout
         if normalize_before:
-            self.layer_norm = torch.nn.BatchNorm1d(num_fields)
+            self.layer_norm = torch.nn.LayerNorm(embed_dim)
         else:
             self.layer_norm = None
-        self.ensemble = ensemble
-        if self.ensemble == 'stack':
-            self.fc = None
-        elif self.ensemble == 'addition':
-            self.fc = torch.nn.Linear(embed_dim, 1)
 
     def build_encoder_layer(self, num_fields, embed_dim, num_heads, ffn_embed_dim, dropout, activation_fn, normalize_before):
         return FeaturesInteractionDecoderLayer(num_fields, embed_dim, num_heads, ffn_embed_dim, dropout, activation_fn, normalize_before)
@@ -300,10 +296,5 @@ class CrossAttentionNetwork(torch.nn.Module):
             x = layer(x, x0, attn_mask)
         if self.layer_norm is not None:
             x = self.layer_norm(x)
-        
-        x = torch.sum(x, dim=1)
-        x = F.dropout(x, p=self.dropout, training=self.training)
-        if self.fc is not None:
-            x = self.fc(x)
 
         return x
