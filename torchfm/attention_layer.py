@@ -4,10 +4,18 @@ import torch.nn.functional as F
 from torchfm.utils import get_activation_fn
 
 
-class MultiheadAttention(torch.nn.Module):
+class MultiheadAttentionInnerProduct(torch.nn.Module):
 
-    def __init__(self, embed_dim, num_heads, dropout):
+    def __init__(self, num_fields, embed_dim, num_heads, dropout):
         super().__init__()
+        self.num_fields = num_fields
+        self.mask = (torch.triu(torch.ones(num_fields, num_fields)) == 1)
+        row, col = list(), list()
+        for i in range(num_fields):
+            for j in range(i, num_fields):
+                row.append(i), col.append(j)
+        self.row, self.col = row, col
+        self.num_cross_terms = num_fields * (num_fields + 1) // 2
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.dropout_p = dropout
@@ -18,13 +26,14 @@ class MultiheadAttention(torch.nn.Module):
 
         self.linear_q = torch.nn.Linear(embed_dim, num_heads * head_dim, bias=True)
         self.linear_k = torch.nn.Linear(embed_dim, num_heads * head_dim, bias=True)
-        self.linear_v = torch.nn.Linear(embed_dim, num_heads * head_dim, bias=True)
+        self.linear_vq = torch.nn.Linear(embed_dim, num_heads * head_dim, bias=True)
+        self.linear_vk = torch.nn.Linear(embed_dim, num_heads * head_dim, bias=True)
 
-        self.output_layer = torch.nn.Linear(embed_dim, embed_dim, bias=False)
+        self.output_layer = torch.nn.Linear(embed_dim, embed_dim, bias=True)
         
-        # self.fc = torch.nn.Linear(embed_dim, 1)
+        self.fc = torch.nn.Linear(embed_dim, 1)
 
-    def forward(self, query, key, value, attn_mask=None):
+    def forward(self, query, key, value_query, value_key, attn_mask=None):
         bsz, num_fields, embed_dim = query.size()
 
         q = self.linear_q(query)
@@ -34,9 +43,12 @@ class MultiheadAttention(torch.nn.Module):
         k = self.linear_q(key)
         k = k.transpose(0, 1).contiguous()
         k = k.view(-1, bsz * self.num_heads, self.head_dim).transpose(0, 1)
-        v = self.linear_v(value)
-        v = v.transpose(0, 1).contiguous()
-        v = v.view(-1, bsz * self.num_heads, self.head_dim).transpose(0, 1)
+        vq = self.linear_vq(value_query)
+        vq = vq.transpose(0, 1).contiguous()
+        vq = vq.view(-1, bsz * self.num_heads, self.head_dim).transpose(0, 1)
+        vk = self.linear_vk(value_key)
+        vk = vk.transpose(0, 1).contiguous()
+        vk = vk.view(-1, bsz * self.num_heads, self.head_dim).transpose(0, 1)
 
         attn_output_weights = torch.bmm(q, k.transpose(1, 2))
 
@@ -45,19 +57,30 @@ class MultiheadAttention(torch.nn.Module):
 
         attn_output_weights = F.softmax(
             attn_output_weights, dim=-1)
-        attn_output_weights = F.dropout(attn_output_weights, p=self.dropout_p, training=self.training)
+        attn_output_weights = F.dropout(attn_output_weights, p=self.dropout_p, training=self.training) # [batch size * num_heads, num_fields, num_fields]
+        attn_output_weights = attn_output_weights[:, self.mask] # [bsz * num_heads, n(n-1)/2] Upper triangular matrix
+        # vq and vk share size as [batch_size * num_heads, num_fields, head_dim]
+        inner_product = vq[:, self.row] * vk[:, self.col] # [bsz * num_heads, n(n-1)/2, head_dim]
 
-        attn_output = torch.bmm(attn_output_weights, v)
-        assert list(attn_output.size()) == [bsz * self.num_heads, num_fields, self.head_dim]
-        attn_output = attn_output.transpose(0, 1).contiguous().view(num_fields, bsz, self.embed_dim).transpose(0, 1) # [batch_size, num_fields, embed_dim]
+        attn_output = attn_output_weights.unsqueeze(-1) * inner_product # same shape with inner product
+        assert list(attn_output.size()) == [bsz * self.num_heads, self.num_cross_terms, self.head_dim]
+        attn_output = attn_output.transpose(0, 1).contiguous().view(self.num_cross_terms, bsz, self.embed_dim).transpose(0, 1) # [batch_size, num_cross_terms, embed_dim]
         
-        # attn_output = torch.sum(attn_output, dim=1)
-        # attn_output = F.dropout(attn_output, p=self.dropout_p, training=self.training)
+        attn_output = self.output_layer(attn_output)
 
-        return self.output_layer(attn_output), None
+        attn_reweight_output = []
+        row, col = list(), list()
+        for i in range(num_fields):
+            prev_len = len(row)
+            for j in range(i, num_fields):
+                row.append(i), col.append(j)
+            attn_reweight_output.append(torch.sum(attn_output[:, prev_len:len(row), :], dim=1))
+        attn_reweight_output = torch.stack(attn_reweight_output, dim=1)
+
+        return attn_reweight_output, attn_output
 
 
-class FeaturesInteractionEncoderLayer(torch.nn.Module):
+class FeaturesInteractionLayer(torch.nn.Module):
     """Encoder layer block.
 
     In the original paper each operation (multi-head attention or FFN) is
@@ -72,14 +95,14 @@ class FeaturesInteractionEncoderLayer(torch.nn.Module):
         args (argparse.Namespace): parsed command-line arguments
     """
 
-    def __init__(self, num_fields, embed_dim, num_heads, ffn_embed_dim, dropout, activation_fn, normalize_before):
+    def __init__(self, num_fields, embed_dim, num_heads, ffn_embed_dim, dropout, activation_fn='relu', normalize_before=True):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.ffn_embed_dim = ffn_embed_dim
         self.normalize_before = normalize_before
-        self.self_attn = self.build_self_attention(embed_dim, num_heads, dropout)
-        self.self_attn_layer_norm = torch.nn.BatchNorm1d(num_fields)
+        self.self_attn = self.build_self_attention(num_fields, embed_dim, num_heads, dropout)
+        self.self_attn_layer_norm = torch.nn.LayerNorm(embed_dim)
         self.dropout = dropout
         self.activation_fn = get_activation_fn(
             activation=activation_fn
@@ -95,7 +118,7 @@ class FeaturesInteractionEncoderLayer(torch.nn.Module):
             ffn_embed_dim, embed_dim
         )
 
-        self.final_layer_norm = torch.nn.BatchNorm1d(num_fields)
+        self.final_layer_norm = torch.nn.LayerNorm(embed_dim)
 
     def build_fc1(self, input_dim, output_dim):
         return torch.nn.Linear(input_dim, output_dim)
@@ -103,14 +126,15 @@ class FeaturesInteractionEncoderLayer(torch.nn.Module):
     def build_fc2(self, input_dim, output_dim):
         return torch.nn.Linear(input_dim, output_dim)
 
-    def build_self_attention(self, embed_dim, num_heads, dropout):
-        return MultiheadAttention(
-            embed_dim=embed_dim,
-            num_heads=num_heads,
+    def build_self_attention(self, num_fields, embed_dim, num_heads, dropout):
+        return MultiheadAttentionInnerProduct(
+            num_fields,
+            embed_dim,
+            num_heads,
             dropout=dropout
         )
 
-    def forward(self, x, attn_mask=None):
+    def forward(self, x, memory, attn_mask=None):
         """
         Args:
             x (Tensor): input to the layer of shape `(seq_len, batch, embed_dim)`
@@ -130,11 +154,12 @@ class FeaturesInteractionEncoderLayer(torch.nn.Module):
         if self.normalize_before:
             x = self.self_attn_layer_norm(x)
         
-        x, _ = self.self_attn(
-            x, x, x,
-            attn_mask
+        x, y = self.self_attn(
+            x, memory, x, memory,
+            attn_mask=attn_mask
         )
         x = F.dropout(x, p=self.dropout, training=self.training)
+        # print(x.size(), y.size())
         x = residual + x
         if not self.normalize_before:
             x = self.self_attn_layer_norm(x)
@@ -150,7 +175,39 @@ class FeaturesInteractionEncoderLayer(torch.nn.Module):
         x = residual + x
         if not self.normalize_before:
             x = self.final_layer_norm(x)
-        return x
+        return x, y
+
+
+class CrossAttentionalProductNetwork(torch.nn.Module):
+
+    def __init__(self, num_fields, embed_dim, num_heads, ffn_embed_dim, num_layers, dropout, activation_fn='relu', normalize_before=True):
+        super().__init__()
+        self.layers = torch.nn.ModuleList([])
+        self.layers.extend(
+            [self.build_encoder_layer(num_fields, embed_dim, num_heads, ffn_embed_dim, dropout, activation_fn, normalize_before) for i in range(num_layers)]
+        )
+        self.dropout = dropout
+        if normalize_before:
+            self.layer_norm = torch.nn.LayerNorm(embed_dim)
+        else:
+            self.layer_norm = None
+        self.fc = torch.nn.Linear(embed_dim, 1)
+
+    def build_encoder_layer(self, num_fields, embed_dim, num_heads, ffn_embed_dim, dropout, activation_fn, normalize_before):
+        return FeaturesInteractionLayer(num_fields, embed_dim, num_heads, ffn_embed_dim, dropout, activation_fn, normalize_before)
+
+    def forward(self, x, attn_mask=None):
+        # x shape: [batch_size, num_fields, embed_dim]
+        x0 = x
+        output = []
+        for layer in self.layers:
+            x, y = layer(x, x0, attn_mask)
+            output.append(y)
+        output = torch.cat(output, dim=1)
+        if self.layer_norm is not None:
+            x = self.layer_norm(x)
+
+        return self.fc(torch.sum(output, dim=1))
 
 
 class FeaturesInteractionDecoderLayer(torch.nn.Module):

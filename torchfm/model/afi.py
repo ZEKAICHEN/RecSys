@@ -35,10 +35,10 @@ class AutomaticFeatureInteractionModel(torch.nn.Module):
         """
         embed_x = self.embedding(x)
         atten_x = self.atten_embedding(embed_x)
-        x0 = atten_x.transpose(0, 1)
+        # x0 = atten_x.transpose(0, 1)
         cross_term = atten_x.transpose(0, 1)
         for self_attn in self.self_attns:
-            cross_term, _ = self_attn(cross_term, x0, x0)
+            cross_term, _ = self_attn(cross_term, cross_term, cross_term)
         cross_term = cross_term.transpose(0, 1)
         if self.has_residual:
             V_res = self.V_res_embedding(embed_x)

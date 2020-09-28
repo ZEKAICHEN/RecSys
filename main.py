@@ -95,12 +95,12 @@ def get_model(name, dataset):
     elif name == 'mhafm':
         print("Model:Multihead Attention Factorization Machine Model")
         return MultiheadAttentionalFactorizationMachineModel(
-            field_dims, embed_dim=16, num_heads=4, ffn_embed_dim=64, num_layers=2, mlp_dims=(100, 100), dropout=0.2
+            field_dims, embed_dim=16, attn_embed_dim=64, num_heads=4, ffn_embed_dim=64, num_layers=2, mlp_dims=(100, 100), dropout=0.2
         )
     elif name == 'dcan':
         print("Model:Deep Cross Attentional Network Model")
         return DeepCrossAttentionalNetworkModel(
-            field_dims, embed_dim=16, attn_embed_dim=64, num_heads=4, ffn_embed_dim=64, num_layers=3, mlp_dims=(100, 100), dropout=0.2
+            field_dims, embed_dim=16, attn_embed_dim=64, num_heads=2, ffn_embed_dim=64, num_layers=3, mlp_dims=(100, 100), dropout=0.2
         )
     else:
         raise ValueError('unknown model name: ' + name)
@@ -183,7 +183,7 @@ def main(dataset_name,
         np.random.seed(seed)
         torch.manual_seed(seed)
         # for model_name in ['hofm', 'nfm', 'ipnn', 'opnn', 'wd', 'dcn', 'dfm', 'xdfm', 'afi', 'afn']:
-        for model_name in ['dcan']:
+        for model_name in ['mhafm']:
             print(f'model name: {model_name}')
             model = get_model(model_name, dataset).to(device)
             criterion = torch.nn.BCELoss()

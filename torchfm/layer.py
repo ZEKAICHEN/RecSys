@@ -2,10 +2,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torchfm.utils import get_activation_fn
-from torchfm.attention_layer import (
-    FeaturesInteractionEncoderLayer,
-    FeaturesInteractionDecoderLayer
-)
 
 
 class FeaturesLinear(torch.nn.Module):
@@ -204,35 +200,6 @@ class AttentionalFactorizationMachine(torch.nn.Module):
         attn_output = F.dropout(attn_output, p=self.dropouts[1], training=self.training)
         return self.fc(attn_output)
 
-
-class MultiheadAttentionalFactorizationMachine(torch.nn.Module):
-
-    def __init__(self, num_fields, embed_dim, num_heads, ffn_embed_dim, num_layers, dropout, activation_fn='relu', normalize_before=True):
-        super().__init__()
-        self.layers = torch.nn.ModuleList([])
-        self.layers.extend(
-            [self.build_encoder_layer(num_fields, embed_dim, num_heads, ffn_embed_dim, dropout, activation_fn, normalize_before) for i in range(num_layers)]
-        )
-        self.dropout = dropout
-        if normalize_before:
-            self.layer_norm = torch.nn.BatchNorm1d(num_fields)
-        else:
-            self.layer_norm = None
-        self.fc = torch.nn.Linear(embed_dim, 1)
-
-    def build_encoder_layer(self, num_fields, embed_dim, num_heads, ffn_embed_dim, dropout, activation_fn, normalize_before):
-        return FeaturesInteractionEncoderLayer(num_fields, embed_dim, num_heads, ffn_embed_dim, dropout, activation_fn, normalize_before)
-
-    def forward(self, x, attn_mask=None):
-        for layer in self.layers:
-            x = layer(x, attn_mask)
-        if self.layer_norm is not None:
-            x = self.layer_norm(x)
-        
-        x = torch.sum(x, dim=1)
-        x = F.dropout(x, p=self.dropout, training=self.training)
-
-        return self.fc(x)
 
 class CompressedInteractionNetwork(torch.nn.Module):
 
