@@ -26,6 +26,7 @@ from torchfm.model.xdfm import ExtremeDeepFactorizationMachineModel
 from torchfm.model.afn import AdaptiveFactorizationNetwork
 from torchfm.model.mhafm import MultiheadAttentionalFactorizationMachineModel
 from torchfm.model.dcan import DeepCrossAttentionalNetworkModel
+from torchfm.model.dcap import DeepCrossAttentionalProductNetwork
 
 import numpy as np
 
@@ -66,6 +67,8 @@ def get_model(name, dataset):
         return ProductNeuralNetworkModel(field_dims, embed_dim=16, mlp_dims=(100, 100), method='inner', dropout=0.2)
     elif name == 'opnn':
         return ProductNeuralNetworkModel(field_dims, embed_dim=16, mlp_dims=(100, 100), method='outer', dropout=0.2)
+    elif name == 'dcap':
+        return DeepCrossAttentionalProductNetwork(field_dims, embed_dim=16, num_layers=2, mlp_dims=(100, 100), dropout=0.2)
     elif name == 'dcn':
         return DeepCrossNetworkModel(field_dims, embed_dim=16, num_layers=2, mlp_dims=(100, 100), dropout=0.2)
     elif name == 'nfm':
@@ -87,7 +90,7 @@ def get_model(name, dataset):
         return AttentionalFactorizationMachineModel(field_dims, embed_dim=16, attn_size=16, dropouts=(0.2, 0.2))
     elif name == 'afi':
         return AutomaticFeatureInteractionModel(
-             field_dims, embed_dim=16, atten_embed_dim=64, num_heads=2, num_layers=3, mlp_dims=(100, 100), dropouts=(0.2, 0.2, 0.2))
+             field_dims, embed_dim=16, atten_embed_dim=64, num_heads=2, num_layers=2, mlp_dims=(100, 100), dropouts=(0.2, 0.2, 0.2))
     elif name == 'afn':
         print("Model:AFN")
         return AdaptiveFactorizationNetwork(
@@ -95,7 +98,7 @@ def get_model(name, dataset):
     elif name == 'mhafm':
         print("Model:Multihead Attention Factorization Machine Model")
         return MultiheadAttentionalFactorizationMachineModel(
-            field_dims, embed_dim=16, attn_embed_dim=64, num_heads=4, ffn_embed_dim=64, num_layers=2, mlp_dims=(100, 100), dropout=0.2
+            field_dims, embed_dim=16, attn_embed_dim=64, num_heads=2, ffn_embed_dim=16, num_layers=2, mlp_dims=(100, 100), dropout=0.2
         )
     elif name == 'dcan':
         print("Model:Deep Cross Attentional Network Model")
@@ -182,10 +185,11 @@ def main(dataset_name,
         print(f'set the seed to: {seed}')
         np.random.seed(seed)
         torch.manual_seed(seed)
-        # for model_name in ['hofm', 'nfm', 'ipnn', 'opnn', 'wd', 'dcn', 'dfm', 'xdfm', 'afi', 'afn']:
-        for model_name in ['mhafm']:
+        for model_name in ['lr', 'fm', 'afm', 'hofm', 'nfm', 'ipnn', 'opnn', 'wd', 'dcn', 'dfm', 'xdfm', 'afi', 'afn']:
+        # for model_name in ['dcap']:
             print(f'model name: {model_name}')
             model = get_model(model_name, dataset).to(device)
+            model.train()
             criterion = torch.nn.BCELoss()
             optimizer = torch.optim.Adam(params=model.parameters(), lr=learning_rate, weight_decay=weight_decay)
             early_stopper = EarlyStopper(num_trials=3, save_path=f'{save_dir}/{model_name}_seed{seed}.pt')
@@ -196,6 +200,8 @@ def main(dataset_name,
                 if not early_stopper.is_continuable(model, auc):
                     print(f'validation: best auc: {early_stopper.best_accuracy}')
                     break
+            model = torch.load(f'{save_dir}/{model_name}_seed{seed}.pt').to(device)
+            model.eval()
             auc, log_loss = test(model, test_data_loader, device)
             print(f'test auc: {auc}')
             print(f'test log_loss: {log_loss}')

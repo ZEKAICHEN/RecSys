@@ -26,8 +26,8 @@ class MultiheadAttentionInnerProduct(torch.nn.Module):
 
         self.linear_q = torch.nn.Linear(embed_dim, num_heads * head_dim, bias=True)
         self.linear_k = torch.nn.Linear(embed_dim, num_heads * head_dim, bias=True)
-        self.linear_vq = torch.nn.Linear(embed_dim, num_heads * head_dim, bias=True)
-        self.linear_vk = torch.nn.Linear(embed_dim, num_heads * head_dim, bias=True)
+        # self.linear_vq = torch.nn.Linear(embed_dim, num_heads * head_dim, bias=True)
+        # self.linear_vk = torch.nn.Linear(embed_dim, num_heads * head_dim, bias=True)
 
         self.output_layer = torch.nn.Linear(embed_dim, embed_dim, bias=True)
         
@@ -43,11 +43,11 @@ class MultiheadAttentionInnerProduct(torch.nn.Module):
         k = self.linear_q(key)
         k = k.transpose(0, 1).contiguous()
         k = k.view(-1, bsz * self.num_heads, self.head_dim).transpose(0, 1)
-        vq = self.linear_vq(value_query)
-        vq = vq.transpose(0, 1).contiguous()
+        # vq = self.linear_vq(value_query)
+        vq = value_query.transpose(0, 1).contiguous()
         vq = vq.view(-1, bsz * self.num_heads, self.head_dim).transpose(0, 1)
-        vk = self.linear_vk(value_key)
-        vk = vk.transpose(0, 1).contiguous()
+        # vk = self.linear_vk(value_key)
+        vk = value_key.transpose(0, 1).contiguous()
         vk = vk.view(-1, bsz * self.num_heads, self.head_dim).transpose(0, 1)
 
         attn_output_weights = torch.bmm(q, k.transpose(1, 2))
@@ -164,17 +164,17 @@ class FeaturesInteractionLayer(torch.nn.Module):
         if not self.normalize_before:
             x = self.self_attn_layer_norm(x)
 
-        residual = x
-        if self.normalize_before:
-            x = self.final_layer_norm(x)
+        # residual = x
+        # if self.normalize_before:
+        #     x = self.final_layer_norm(x)
 
-        x = self.activation_fn(self.fc1(x))
-        x = F.dropout(x, p=float(self.activation_dropout), training=self.training)
-        x = self.fc2(x)
-        x = F.dropout(x, p=self.dropout, training=self.training)
-        x = residual + x
-        if not self.normalize_before:
-            x = self.final_layer_norm(x)
+        # x = self.activation_fn(self.fc1(x))
+        # x = F.dropout(x, p=float(self.activation_dropout), training=self.training)
+        # x = self.fc2(x)
+        # x = F.dropout(x, p=self.dropout, training=self.training)
+        # x = residual + x
+        # if not self.normalize_before:
+        #     x = self.final_layer_norm(x)
         return x, y
 
 
@@ -207,7 +207,7 @@ class CrossAttentionalProductNetwork(torch.nn.Module):
         if self.layer_norm is not None:
             x = self.layer_norm(x)
 
-        return self.fc(torch.sum(output, dim=1))
+        return self.fc(output)
 
 
 class FeaturesInteractionDecoderLayer(torch.nn.Module):
