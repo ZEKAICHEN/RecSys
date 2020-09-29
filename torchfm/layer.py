@@ -165,7 +165,7 @@ class CrossProductNetwork(torch.nn.Module):
             raise ValueError('unknown kernel type: ' + kernel_type)
         self.kernel_type = kernel_type
         self.kernel = torch.nn.Parameter(torch.zeros(kernel_shape))
-        # self.fc = torch.nn.Linear(embed_dim * 4, embed_dim)
+        self.fc = torch.nn.Linear(embed_dim, 1)
         torch.nn.init.xavier_uniform_(self.kernel.data)
 
     def forward(self, x, z):
@@ -179,10 +179,14 @@ class CrossProductNetwork(torch.nn.Module):
                 row.append(i), col.append(j)
         p, q = x[:, row], z[:, col]
         if self.kernel_type == 'mat':
+            # kp = torch.sum(p.unsqueeze(1) * attn_scores, dim=-1).permute(0, 2, 1)
+            
             kp = torch.sum(p.unsqueeze(1) * self.kernel, dim=-1).permute(0, 2, 1) # (bsz, n(n+1)/2, embed_dim)
             # kp = (p.unsqueeze(1) * self.kernel).permute(0, 2, 1, 3).reshape(bsz, num_fields * (num_fields + 1) // 2, -1)
+            # kp = p.unsqueeze(1) * self.kernel
             # kp = self.fc(kp)
             kpq = kp * q
+            
             # kpq = torch.sum(pq.unsqueeze(1) * self.kernel, dim=-1).permute(0, 2, 1)
             pq_reweight = []
             row, col = list(), list()
@@ -205,6 +209,7 @@ class CrossAttentionalProductNetwork(torch.nn.Module):
         self.layers.extend(
             [self.build_encoder_layer(num_fields=num_fields, embed_dim=embed_dim, kernel_type=kernel_type) for _ in range(num_layers)]
         )
+        self.fc = torch.nn.Linear(embed_dim, 1)
 
     def build_encoder_layer(self, num_fields, embed_dim, kernel_type='mat'):
         return CrossProductNetwork(num_fields=num_fields, embed_dim=embed_dim, kernel_type=kernel_type)
@@ -217,7 +222,7 @@ class CrossAttentionalProductNetwork(torch.nn.Module):
             output.append(y)
         output = torch.cat(output, dim=1)
 
-        return torch.sum(output, dim=1)
+        return self.fc(output).squeeze(-1)
 
 
 class CrossNetwork(torch.nn.Module):
