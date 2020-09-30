@@ -168,16 +168,16 @@ class CrossProductNetwork(torch.nn.Module):
         self.fc = torch.nn.Linear(embed_dim, 1)
         torch.nn.init.xavier_uniform_(self.kernel.data)
 
-    def forward(self, x, z):
+    def forward(self, p, q):
         """
         :param x: Float tensor of size ``(batch_size, num_fields, embed_dim)``
         """
-        bsz, num_fields, embed_dim = x.size()
-        row, col = list(), list()
-        for i in range(num_fields):
-            for j in range(i, num_fields):
-                row.append(i), col.append(j)
-        p, q = x[:, row], z[:, col]
+        # bsz, num_fields, embed_dim = x.size()
+        # row, col = list(), list()
+        # for i in range(num_fields):
+        #     for j in range(i, num_fields):
+        #         row.append(i), col.append(j)
+        # p, q = x[:, row], z[:, col]
         if self.kernel_type == 'mat':
             # kp = torch.sum(p.unsqueeze(1) * attn_scores, dim=-1).permute(0, 2, 1)
             
@@ -188,15 +188,15 @@ class CrossProductNetwork(torch.nn.Module):
             kpq = kp * q
             
             # kpq = torch.sum(pq.unsqueeze(1) * self.kernel, dim=-1).permute(0, 2, 1)
-            pq_reweight = []
-            row, col = list(), list()
-            for i in range(num_fields):
-                prev_len = len(row)
-                for j in range(i, num_fields):
-                    row.append(i), col.append(j)
-                pq_reweight.append(torch.sum(kpq[:, prev_len:len(row), :], dim=1, keepdim=True))
-            x = torch.cat(pq_reweight, dim=1)
-            return x, kpq
+            # pq_reweight = []
+            # row, col = list(), list()
+            # for i in range(num_fields):
+            #     prev_len = len(row)
+            #     for j in range(i, num_fields):
+            #         row.append(i), col.append(j)
+            #     pq_reweight.append(torch.sum(kpq[:, prev_len:len(row), :], dim=1, keepdim=True))
+            # x = torch.cat(pq_reweight, dim=1)
+            return kpq
         else:
             return torch.sum(p * q * self.kernel.unsqueeze(0), -1)
 
@@ -215,11 +215,17 @@ class CrossAttentionalProductNetwork(torch.nn.Module):
         return CrossProductNetwork(num_fields=num_fields, embed_dim=embed_dim, kernel_type=kernel_type)
 
     def forward(self, x):
-        x0 = x
+        [bsz, num_fields, embed_dim] = x.size()
+        row, col = list(), list()
+        for i in range(num_fields):
+            for j in range(i, num_fields):
+                row.append(i), col.append(j)
+        x0 = x[:, col]
+        x = x[:, row]
         output = []
         for layer in self.layers:
-            x, y = layer(x, x0)
-            output.append(y)
+            x = layer(x, x0)
+            output.append(x)
         output = torch.cat(output, dim=1)
 
         return self.fc(output).squeeze(-1)
