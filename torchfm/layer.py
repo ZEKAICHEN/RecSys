@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torchfm.utils import get_activation_fn
-
+from torchfm.attention_layer import MultiheadAttentionInnerProduct
 
 class FeaturesLinear(torch.nn.Module):
 
@@ -152,7 +152,7 @@ class OuterProductNetwork(torch.nn.Module):
 
 class CrossProductNetwork(torch.nn.Module):
 
-    def __init__(self, num_fields, embed_dim, kernel_type='mat'):
+    def __init__(self, num_fields, embed_dim, num_heads, dropout=0.2, kernel_type='mat'):
         super().__init__()
         num_ix = num_fields * (num_fields + 1) // 2
         if kernel_type == 'mat':
@@ -165,27 +165,39 @@ class CrossProductNetwork(torch.nn.Module):
             raise ValueError('unknown kernel type: ' + kernel_type)
         self.kernel_type = kernel_type
         self.kernel = torch.nn.Parameter(torch.zeros(kernel_shape))
-        self.fc = torch.nn.Linear(embed_dim, 1)
+        # self.attention = torch.nn.Linear(embed_dim, 64)
+        # self.projection = torch.nn.Linear(embed_dim * 4, 1)
+        # self.fc = torch.nn.Linear(embed_dim, 1)
+        self.attn = MultiheadAttentionInnerProduct(num_fields, embed_dim, num_heads, dropout)
         torch.nn.init.xavier_uniform_(self.kernel.data)
 
-    def forward(self, p, q):
+    def forward(self, x, z, attn_mask=None):
         """
         :param x: Float tensor of size ``(batch_size, num_fields, embed_dim)``
         """
-        # bsz, num_fields, embed_dim = x.size()
-        # row, col = list(), list()
-        # for i in range(num_fields):
-        #     for j in range(i, num_fields):
-        #         row.append(i), col.append(j)
-        # p, q = x[:, row], z[:, col]
+        # bsz, num_cross_terms, embed_dim = x.size()
+        bsz, num_fields, embed_dim = z.size()
+        row, col = list(), list()
+        for i in range(num_fields):
+            for j in range(i, num_fields):
+                row.append(i), col.append(j)
+        p, q = x[:, row], z[:, col]
         if self.kernel_type == 'mat':
-            # kp = torch.sum(p.unsqueeze(1) * attn_scores, dim=-1).permute(0, 2, 1)
-            
+            # print(p.size(), self.kernel.size())
             kp = torch.sum(p.unsqueeze(1) * self.kernel, dim=-1).permute(0, 2, 1) # (bsz, n(n+1)/2, embed_dim)
+            x, kpq = self.attn(x, z, kp, q, attn_mask)
+            # concat_embedding = torch.cat([p, q, p-q, p*q], dim=-1)
+            # attn_scores = F.relu(concat_embedding)
+            # attn_scores = F.softmax(self.projection(attn_scores), dim=1)
+            # # attn_scores = self.projection(attn_scores)
+            # attn_scores = F.dropout(attn_scores, p=.2, training=self.training)
+            # print(p.size(), self.kernel.size())
+            
             # kp = (p.unsqueeze(1) * self.kernel).permute(0, 2, 1, 3).reshape(bsz, num_fields * (num_fields + 1) // 2, -1)
             # kp = p.unsqueeze(1) * self.kernel
             # kp = self.fc(kp)
-            kpq = kp * q
+            # kpq = attn_scores * (kp * q)
+            # kpq = attn_scores * (kp * q)
             
             # kpq = torch.sum(pq.unsqueeze(1) * self.kernel, dim=-1).permute(0, 2, 1)
             # pq_reweight = []
@@ -193,42 +205,45 @@ class CrossProductNetwork(torch.nn.Module):
             # for i in range(num_fields):
             #     prev_len = len(row)
             #     for j in range(i, num_fields):
+            #         # if i != j:
             #         row.append(i), col.append(j)
             #     pq_reweight.append(torch.sum(kpq[:, prev_len:len(row), :], dim=1, keepdim=True))
             # x = torch.cat(pq_reweight, dim=1)
-            return kpq
+            return x, kpq
         else:
             return torch.sum(p * q * self.kernel.unsqueeze(0), -1)
 
 
 class CrossAttentionalProductNetwork(torch.nn.Module):
 
-    def __init__(self, num_fields, embed_dim, num_layers, kernel_type='mat'):
+    def __init__(self, num_fields, embed_dim, num_heads, num_layers, dropout=0.2, kernel_type='mat'):
         super().__init__()
         self.layers = torch.nn.ModuleList([])
         self.layers.extend(
-            [self.build_encoder_layer(num_fields=num_fields, embed_dim=embed_dim, kernel_type=kernel_type) for _ in range(num_layers)]
+            [self.build_encoder_layer(num_fields=num_fields, embed_dim=embed_dim, num_heads=num_heads, 
+                                    dropout=dropout, kernel_type=kernel_type) for _ in range(num_layers)]
         )
-        self.fc = torch.nn.Linear(embed_dim, 1)
+        # self.fc = torch.nn.Linear(embed_dim, 1)
 
-    def build_encoder_layer(self, num_fields, embed_dim, kernel_type='mat'):
-        return CrossProductNetwork(num_fields=num_fields, embed_dim=embed_dim, kernel_type=kernel_type)
+    def build_encoder_layer(self, num_fields, embed_dim, num_heads, dropout, kernel_type='mat'):
+        return CrossProductNetwork(num_fields=num_fields, embed_dim=embed_dim, num_heads=num_heads, dropout=dropout, kernel_type=kernel_type)
 
-    def forward(self, x):
-        [bsz, num_fields, embed_dim] = x.size()
-        row, col = list(), list()
-        for i in range(num_fields):
-            for j in range(i, num_fields):
-                row.append(i), col.append(j)
-        x0 = x[:, col]
-        x = x[:, row]
+    def forward(self, x, attn_mask=None):
+        # [bsz, num_fields, embed_dim] = x.size()
+        # row, col = list(), list()
+        # for i in range(num_fields):
+        #     for j in range(i, num_fields):
+        #         row.append(i), col.append(j)
+        # x0 = x[:, col]
+        # x = x[:, row]
+        x0 = x
         output = []
         for layer in self.layers:
-            x = layer(x, x0)
-            output.append(x)
+            x, y = layer(x, x0, attn_mask)
+            output.append(y)
         output = torch.cat(output, dim=1)
 
-        return self.fc(output).squeeze(-1)
+        return output
 
 
 class CrossNetwork(torch.nn.Module):

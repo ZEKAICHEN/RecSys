@@ -10,11 +10,6 @@ class MultiheadAttentionInnerProduct(torch.nn.Module):
         super().__init__()
         self.num_fields = num_fields
         self.mask = (torch.triu(torch.ones(num_fields, num_fields)) == 1)
-        row, col = list(), list()
-        for i in range(num_fields):
-            for j in range(i, num_fields):
-                row.append(i), col.append(j)
-        self.row, self.col = row, col
         self.num_cross_terms = num_fields * (num_fields + 1) // 2
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -31,7 +26,7 @@ class MultiheadAttentionInnerProduct(torch.nn.Module):
 
         self.output_layer = torch.nn.Linear(embed_dim, embed_dim, bias=True)
         
-        self.fc = torch.nn.Linear(embed_dim, 1)
+        # self.fc = torch.nn.Linear(embed_dim, 1)
 
     def forward(self, query, key, value_query, value_key, attn_mask=None):
         bsz, num_fields, embed_dim = query.size()
@@ -60,7 +55,8 @@ class MultiheadAttentionInnerProduct(torch.nn.Module):
         attn_output_weights = F.dropout(attn_output_weights, p=self.dropout_p, training=self.training) # [batch size * num_heads, num_fields, num_fields]
         attn_output_weights = attn_output_weights[:, self.mask] # [bsz * num_heads, n(n-1)/2] Upper triangular matrix
         # vq and vk share size as [batch_size * num_heads, num_fields, head_dim]
-        inner_product = vq[:, self.row] * vk[:, self.col] # [bsz * num_heads, n(n-1)/2, head_dim]
+        # inner_product = vq[:, self.row] * vk[:, self.col] # [bsz * num_heads, n(n-1)/2, head_dim]
+        inner_product = vq * vk
 
         attn_output = attn_output_weights.unsqueeze(-1) * inner_product # same shape with inner product
         assert list(attn_output.size()) == [bsz * self.num_heads, self.num_cross_terms, self.head_dim]
@@ -74,8 +70,8 @@ class MultiheadAttentionInnerProduct(torch.nn.Module):
             prev_len = len(row)
             for j in range(i, num_fields):
                 row.append(i), col.append(j)
-            attn_reweight_output.append(torch.sum(attn_output[:, prev_len:len(row), :], dim=1))
-        attn_reweight_output = torch.stack(attn_reweight_output, dim=1)
+            attn_reweight_output.append(torch.sum(attn_output[:, prev_len:len(row), :], dim=1, keepdim=True))
+        attn_reweight_output = torch.cat(attn_reweight_output, dim=1)
 
         return attn_reweight_output, attn_output
 

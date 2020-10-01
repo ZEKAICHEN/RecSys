@@ -8,6 +8,7 @@ from torchfm.dataset.avazu import AvazuDataset
 from torchfm.dataset.criteo import CriteoDataset
 from torchfm.dataset.movielens import MovieLens1MDataset, MovieLens20MDataset
 from torchfm.dataset.frappe import FrappeDataset
+# from torchfm.dataset.rapid import RapidAdvanceDataset
 from torchfm.model.afi import AutomaticFeatureInteractionModel
 from torchfm.model.afm import AttentionalFactorizationMachineModel
 from torchfm.model.dcn import DeepCrossNetworkModel
@@ -42,6 +43,8 @@ def get_dataset(name, path):
         return AvazuDataset(path)
     elif name == 'frappe':
         return FrappeDataset(path)
+    # elif name == 'rapid':
+    #     return RapidAdvanceDataset(path)
     else:
         raise ValueError('unknown dataset name: ' + name)
 
@@ -68,7 +71,7 @@ def get_model(name, dataset):
     elif name == 'opnn':
         return ProductNeuralNetworkModel(field_dims, embed_dim=16, mlp_dims=(100, 100), method='outer', dropout=0.2)
     elif name == 'dcap':
-        return DeepCrossAttentionalProductNetwork(field_dims, embed_dim=16, num_layers=2, mlp_dims=(100, 100), dropout=0.2)
+        return DeepCrossAttentionalProductNetwork(field_dims, embed_dim=16, num_heads=4, num_layers=2, mlp_dims=(100, 100), dropout=0.2)
     elif name == 'dcn':
         return DeepCrossNetworkModel(field_dims, embed_dim=16, num_layers=2, mlp_dims=(100, 100), dropout=0.2)
     elif name == 'nfm':
