@@ -166,8 +166,8 @@ class CrossProductNetwork(torch.nn.Module):
         self.kernel_type = kernel_type
         self.kernel = torch.nn.Parameter(torch.zeros(kernel_shape))
         # self.attention = torch.nn.Linear(embed_dim, 64)
-        self.projection = torch.nn.Linear(embed_dim * 4, 1)
-        # self.avg_pool = torch.nn.AdaptiveAvgPool1d(num_fields)
+        # self.projection = torch.nn.Linear(embed_dim * 4, 1)
+        self.avg_pool = torch.nn.AdaptiveAvgPool1d(num_fields)
         # self.fc = torch.nn.Linear(embed_dim, 1)
         # self.attn = MultiheadAttentionInnerProduct(num_fields, embed_dim, num_heads, dropout)
         torch.nn.init.xavier_uniform_(self.kernel.data)
@@ -200,7 +200,7 @@ class CrossProductNetwork(torch.nn.Module):
             # kpq = attn_scores * (kp * q)
             kpq = kp * q
             # kpq = attn_scores * (kp * q)
-            # x = self.avg_pool(kpq.permute(0, 2, 1)).permute(0, 2, 1)
+            x = self.avg_pool(kpq.permute(0, 2, 1)).permute(0, 2, 1)
             x = torch.flip(x, [1])
             # kpq = torch.sum(pq.unsqueeze(1) * self.kernel, dim=-1).permute(0, 2, 1)
             # pq_reweight = []
