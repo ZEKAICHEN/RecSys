@@ -154,7 +154,7 @@ class CrossProductNetwork(torch.nn.Module):
 
     def __init__(self, num_fields, embed_dim, num_heads, dropout=0.2, kernel_type='mat'):
         super().__init__()
-        num_ix = num_fields * (num_fields + 1) // 2
+        num_ix = num_fields * (num_fields - 1) // 2
         if kernel_type == 'mat':
             kernel_shape = embed_dim, num_ix, embed_dim
         elif kernel_type == 'vec':
@@ -166,9 +166,10 @@ class CrossProductNetwork(torch.nn.Module):
         self.kernel_type = kernel_type
         self.kernel = torch.nn.Parameter(torch.zeros(kernel_shape))
         # self.attention = torch.nn.Linear(embed_dim, 64)
-        # self.projection = torch.nn.Linear(embed_dim * 4, 1)
+        self.projection = torch.nn.Linear(embed_dim * 4, 1)
+        # self.avg_pool = torch.nn.AdaptiveAvgPool1d(num_fields)
         # self.fc = torch.nn.Linear(embed_dim, 1)
-        self.attn = MultiheadAttentionInnerProduct(num_fields, embed_dim, num_heads, dropout)
+        # self.attn = MultiheadAttentionInnerProduct(num_fields, embed_dim, num_heads, dropout)
         torch.nn.init.xavier_uniform_(self.kernel.data)
 
     def forward(self, x, z, attn_mask=None):
@@ -178,18 +179,18 @@ class CrossProductNetwork(torch.nn.Module):
         # bsz, num_cross_terms, embed_dim = x.size()
         bsz, num_fields, embed_dim = z.size()
         row, col = list(), list()
-        for i in range(num_fields):
-            for j in range(i, num_fields):
+        for i in range(num_fields - 1):
+            for j in range(i + 1, num_fields):
                 row.append(i), col.append(j)
-        p, q = x[:, row], z[:, col]
+        p, q = z[:, row], x[:, col]
         if self.kernel_type == 'mat':
             # print(p.size(), self.kernel.size())
             kp = torch.sum(p.unsqueeze(1) * self.kernel, dim=-1).permute(0, 2, 1) # (bsz, n(n+1)/2, embed_dim)
-            x, kpq = self.attn(x, z, kp, q, attn_mask)
-            # concat_embedding = torch.cat([p, q, p-q, p*q], dim=-1)
+            # x, kpq = self.attn(z, x, kp, q, attn_mask)
+            # concat_embedding = torch.cat([p, q, p+q, p*q], dim=-1)
             # attn_scores = F.relu(concat_embedding)
             # attn_scores = F.softmax(self.projection(attn_scores), dim=1)
-            # # attn_scores = self.projection(attn_scores)
+            # attn_scores = self.projection(attn_scores)
             # attn_scores = F.dropout(attn_scores, p=.2, training=self.training)
             # print(p.size(), self.kernel.size())
             
@@ -197,8 +198,10 @@ class CrossProductNetwork(torch.nn.Module):
             # kp = p.unsqueeze(1) * self.kernel
             # kp = self.fc(kp)
             # kpq = attn_scores * (kp * q)
+            kpq = kp * q
             # kpq = attn_scores * (kp * q)
-            
+            # x = self.avg_pool(kpq.permute(0, 2, 1)).permute(0, 2, 1)
+            x = torch.flip(x, [1])
             # kpq = torch.sum(pq.unsqueeze(1) * self.kernel, dim=-1).permute(0, 2, 1)
             # pq_reweight = []
             # row, col = list(), list()
@@ -209,7 +212,8 @@ class CrossProductNetwork(torch.nn.Module):
             #         row.append(i), col.append(j)
             #     pq_reweight.append(torch.sum(kpq[:, prev_len:len(row), :], dim=1, keepdim=True))
             # x = torch.cat(pq_reweight, dim=1)
-            return x, kpq
+
+            return x, torch.sum(kpq, dim=-1)
         else:
             return torch.sum(p * q * self.kernel.unsqueeze(0), -1)
 
@@ -223,6 +227,7 @@ class CrossAttentionalProductNetwork(torch.nn.Module):
             [self.build_encoder_layer(num_fields=num_fields, embed_dim=embed_dim, num_heads=num_heads, 
                                     dropout=dropout, kernel_type=kernel_type) for _ in range(num_layers)]
         )
+        # self.norm = torch.nn.BatchNorm1d(num_fields * (num_fields - 1) // 2)
         # self.fc = torch.nn.Linear(embed_dim, 1)
 
     def build_encoder_layer(self, num_fields, embed_dim, num_heads, dropout, kernel_type='mat'):
@@ -242,7 +247,7 @@ class CrossAttentionalProductNetwork(torch.nn.Module):
             x, y = layer(x, x0, attn_mask)
             output.append(y)
         output = torch.cat(output, dim=1)
-
+        # print(output.size())
         return output
 
 

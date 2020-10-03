@@ -192,6 +192,7 @@ def main(dataset_name,
         for model_name in ['dcap']:
             print(f'model name: {model_name}')
             model = get_model(model_name, dataset).to(device)
+            print(model)
             criterion = torch.nn.BCELoss()
             optimizer = torch.optim.Adam(params=model.parameters(), lr=learning_rate, weight_decay=weight_decay)
             early_stopper = EarlyStopper(num_trials=3, save_path=f'{save_dir}/{model_name}_seed{seed}.pt')
@@ -219,7 +220,7 @@ if __name__ == '__main__':
     parser.add_argument('--epoch', type=int, default=100)
     parser.add_argument('--learning_rate', type=float, default=0.001)
     parser.add_argument('--batch_size', type=int, default=4096)
-    parser.add_argument('--weight_decay', type=float, default=1e-4)
+    parser.add_argument('--weight_decay', type=float, default=1e-6)
     parser.add_argument('--device', default='cuda:0')
     parser.add_argument('--save_dir', default='checkpoints/avazu')
     args = parser.parse_args()

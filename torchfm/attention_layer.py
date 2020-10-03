@@ -9,8 +9,8 @@ class MultiheadAttentionInnerProduct(torch.nn.Module):
     def __init__(self, num_fields, embed_dim, num_heads, dropout):
         super().__init__()
         self.num_fields = num_fields
-        self.mask = (torch.triu(torch.ones(num_fields, num_fields)) == 1)
-        self.num_cross_terms = num_fields * (num_fields + 1) // 2
+        self.mask = (torch.triu(torch.ones(num_fields, num_fields), diagonal=1) == 1)
+        self.num_cross_terms = num_fields * (num_fields - 1) // 2
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.dropout_p = dropout
@@ -23,7 +23,7 @@ class MultiheadAttentionInnerProduct(torch.nn.Module):
         self.linear_k = torch.nn.Linear(embed_dim, num_heads * head_dim, bias=True)
         # self.linear_vq = torch.nn.Linear(embed_dim, num_heads * head_dim, bias=True)
         # self.linear_vk = torch.nn.Linear(embed_dim, num_heads * head_dim, bias=True)
-
+        self.avg_pool = torch.nn.AdaptiveAvgPool1d(num_fields)
         self.output_layer = torch.nn.Linear(embed_dim, embed_dim, bias=True)
         
         # self.fc = torch.nn.Linear(embed_dim, 1)
@@ -35,7 +35,7 @@ class MultiheadAttentionInnerProduct(torch.nn.Module):
         q = q.transpose(0, 1).contiguous()
         q = q.view(-1, bsz * self.num_heads, self.head_dim).transpose(0, 1) # [batch size * num_heads, num_fields, head_dim]
         q = q * self.scale
-        k = self.linear_q(key)
+        k = self.linear_k(key)
         k = k.transpose(0, 1).contiguous()
         k = k.view(-1, bsz * self.num_heads, self.head_dim).transpose(0, 1)
         # vq = self.linear_vq(value_query)
@@ -64,14 +64,15 @@ class MultiheadAttentionInnerProduct(torch.nn.Module):
         
         attn_output = self.output_layer(attn_output)
 
-        attn_reweight_output = []
-        row, col = list(), list()
-        for i in range(num_fields):
-            prev_len = len(row)
-            for j in range(i, num_fields):
-                row.append(i), col.append(j)
-            attn_reweight_output.append(torch.sum(attn_output[:, prev_len:len(row), :], dim=1, keepdim=True))
-        attn_reweight_output = torch.cat(attn_reweight_output, dim=1)
+        # attn_reweight_output = []
+        # row, col = list(), list()
+        # for i in range(num_fields):
+        #     prev_len = len(row)
+        #     for j in range(i, num_fields):
+        #         row.append(i), col.append(j)
+        #     attn_reweight_output.append(torch.sum(attn_output[:, prev_len:len(row), :], dim=1, keepdim=True))
+        # attn_reweight_output = torch.cat(attn_reweight_output, dim=1)
+        attn_reweight_output = self.avg_pool(attn_output.permute(0, 2, 1)).permute(0, 2, 1)
 
         return attn_reweight_output, attn_output
 
