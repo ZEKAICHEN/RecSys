@@ -63,19 +63,19 @@ def get_model(name, dataset):
     elif name == 'ffm':
         return FieldAwareFactorizationMachineModel(field_dims, embed_dim=16)
     elif name == 'fnn':
-        return FactorizationSupportedNeuralNetworkModel(field_dims, embed_dim=16, mlp_dims=(100, 100), dropout=0.2)
+        return FactorizationSupportedNeuralNetworkModel(field_dims, embed_dim=16, mlp_dims=(100, 100), dropout=0.5)
     elif name == 'wd':
-        return WideAndDeepModel(field_dims, embed_dim=16, mlp_dims=(100, 100), dropout=0.2)
+        return WideAndDeepModel(field_dims, embed_dim=16, mlp_dims=(100, 100), dropout=0.5)
     elif name == 'ipnn':
-        return ProductNeuralNetworkModel(field_dims, embed_dim=16, mlp_dims=(100, 100), method='inner', dropout=0.2)
+        return ProductNeuralNetworkModel(field_dims, embed_dim=16, mlp_dims=(100, 100), method='inner', dropout=0.5)
     elif name == 'opnn':
-        return ProductNeuralNetworkModel(field_dims, embed_dim=16, mlp_dims=(100, 100), method='outer', dropout=0.2)
+        return ProductNeuralNetworkModel(field_dims, embed_dim=16, mlp_dims=(100, 100), method='outer', dropout=0.5)
     elif name == 'dcap':
-        return DeepCrossAttentionalProductNetwork(field_dims, embed_dim=16, num_heads=4, num_layers=2, mlp_dims=(100, 100), dropout=0.2)
+        return DeepCrossAttentionalProductNetwork(field_dims, embed_dim=16, num_heads=4, num_layers=2, mlp_dims=(100, 100), dropout=0.5)
     elif name == 'dcn':
-        return DeepCrossNetworkModel(field_dims, embed_dim=16, num_layers=2, mlp_dims=(100, 100), dropout=0.2)
+        return DeepCrossNetworkModel(field_dims, embed_dim=16, num_layers=2, mlp_dims=(100, 100), dropout=0.5)
     elif name == 'nfm':
-        return NeuralFactorizationMachineModel(field_dims, embed_dim=16, mlp_dims=(100, 100), dropouts=(0.2, 0.2))
+        return NeuralFactorizationMachineModel(field_dims, embed_dim=16, mlp_dims=(100, 100), dropouts=(0.5, 0.5))
     elif name == 'ncf':
         # only supports MovieLens dataset because for other datasets user/item colums are indistinguishable
         assert isinstance(dataset, MovieLens20MDataset) or isinstance(dataset, MovieLens1MDataset)
@@ -85,19 +85,19 @@ def get_model(name, dataset):
     elif name == 'fnfm':
         return FieldAwareNeuralFactorizationMachineModel(field_dims, embed_dim=4, mlp_dims=(64,), dropouts=(0.2, 0.2))
     elif name == 'dfm':
-        return DeepFactorizationMachineModel(field_dims, embed_dim=16, mlp_dims=(100, 100), dropout=0.2)
+        return DeepFactorizationMachineModel(field_dims, embed_dim=16, mlp_dims=(100, 100), dropout=0.5)
     elif name == 'xdfm':
         return ExtremeDeepFactorizationMachineModel(
-            field_dims, embed_dim=16, cross_layer_sizes=(16, 16), split_half=False, mlp_dims=(100, 100), dropout=0.2)
+            field_dims, embed_dim=16, cross_layer_sizes=(16, 16), split_half=False, mlp_dims=(100, 100), dropout=0.5)
     elif name == 'afm':
-        return AttentionalFactorizationMachineModel(field_dims, embed_dim=16, attn_size=16, dropouts=(0.2, 0.2))
+        return AttentionalFactorizationMachineModel(field_dims, embed_dim=16, attn_size=64, dropouts=(0.5, 0.5))
     elif name == 'afi':
         return AutomaticFeatureInteractionModel(
-             field_dims, embed_dim=16, atten_embed_dim=64, num_heads=2, num_layers=2, mlp_dims=(100, 100), dropouts=(0.2, 0.2, 0.2))
+             field_dims, embed_dim=16, atten_embed_dim=64, num_heads=2, num_layers=2, mlp_dims=(100, 100), dropouts=(0.5, 0.5, 0.5))
     elif name == 'afn':
         print("Model:AFN")
         return AdaptiveFactorizationNetwork(
-            field_dims, embed_dim=16, LNN_dim=1500, mlp_dims=(100, 100), dropouts=(0.2, 0.2, 0.2))
+            field_dims, embed_dim=16, LNN_dim=1500, mlp_dims=(100, 100), dropouts=(0.5, 0.5, 0.5))
     elif name == 'mhafm':
         print("Model:Multihead Attention Factorization Machine Model")
         return MultiheadAttentionalFactorizationMachineModel(
@@ -188,8 +188,9 @@ def main(dataset_name,
         print(f'set the seed to: {seed}')
         np.random.seed(seed)
         torch.manual_seed(seed)
+        for model_name in ['afm', 'nfm', 'ipnn', 'opnn', 'wd', 'dcn', 'dfm', 'xdfm', 'afi', 'afn']:
         # for model_name in ['lr', 'fm', 'afm', 'hofm', 'nfm', 'ipnn', 'opnn', 'wd', 'dcn', 'dfm', 'xdfm', 'afi', 'afn']:
-        for model_name in ['dcap']:
+        # for model_name in ['dfm']:
             print(f'model name: {model_name}')
             model = get_model(model_name, dataset).to(device)
             print(model)
