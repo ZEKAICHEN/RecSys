@@ -83,9 +83,9 @@ def get_model(name, dataset):
                                             user_field_idx=dataset.user_field_idx,
                                             item_field_idx=dataset.item_field_idx)
     elif name == 'fnfm':
-        return FieldAwareNeuralFactorizationMachineModel(field_dims, embed_dim=4, mlp_dims=(64,), dropouts=(0.2, 0.2))
+        return FieldAwareNeuralFactorizationMachineModel(field_dims, embed_dim=4, mlp_dims=(64,), dropouts=(0.5, 0.5))
     elif name == 'dfm':
-        return DeepFactorizationMachineModel(field_dims, embed_dim=16, mlp_dims=(100, 100), dropout=0.5)
+        return DeepFactorizationMachineModel(field_dims, embed_dim=16, mlp_dims=(100, 100), dropout=0.1)
     elif name == 'xdfm':
         return ExtremeDeepFactorizationMachineModel(
             field_dims, embed_dim=16, cross_layer_sizes=(16, 16), split_half=False, mlp_dims=(100, 100), dropout=0.5)
@@ -188,9 +188,9 @@ def main(dataset_name,
         print(f'set the seed to: {seed}')
         np.random.seed(seed)
         torch.manual_seed(seed)
-        for model_name in ['afm', 'nfm', 'ipnn', 'opnn', 'wd', 'dcn', 'dfm', 'xdfm', 'afi', 'afn']:
+        # for model_name in ['afm', 'nfm', 'ipnn', 'opnn', 'wd', 'dcn', 'dfm', 'xdfm', 'afi', 'afn']:
         # for model_name in ['lr', 'fm', 'afm', 'hofm', 'nfm', 'ipnn', 'opnn', 'wd', 'dcn', 'dfm', 'xdfm', 'afi', 'afn']:
-        # for model_name in ['dfm']:
+        for model_name in ['dfm']:
             print(f'model name: {model_name}')
             model = get_model(model_name, dataset).to(device)
             print(model)
