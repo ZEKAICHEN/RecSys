@@ -49,7 +49,7 @@ def get_dataset(name, path):
         raise ValueError('unknown dataset name: ' + name)
 
 
-def get_model(name, dataset):
+def get_model(name, dataset, nhead, nlayer):
     """
     Hyperparameters are empirically determined, not opitmized.
     """
@@ -71,11 +71,11 @@ def get_model(name, dataset):
     elif name == 'opnn':
         return ProductNeuralNetworkModel(field_dims, embed_dim=16, mlp_dims=(100, 100), method='outer', dropout=0.5)
     elif name == 'dcap':
-        return DeepCrossAttentionalProductNetwork(field_dims, embed_dim=16, num_heads=4, num_layers=2, mlp_dims=(100, 100), dropout=0.5)
+        return DeepCrossAttentionalProductNetwork(field_dims, embed_dim=64, num_heads=nhead, num_layers=nlayer, mlp_dims=(100, 100), dropouts=(0.2, 0.5))
     elif name == 'dcn':
         return DeepCrossNetworkModel(field_dims, embed_dim=16, num_layers=2, mlp_dims=(100, 100), dropout=0.5)
     elif name == 'nfm':
-        return NeuralFactorizationMachineModel(field_dims, embed_dim=16, mlp_dims=(100, 100), dropouts=(0.5, 0.5))
+        return NeuralFactorizationMachineModel(field_dims, embed_dim=16, mlp_dims=(100, 100), dropouts=(0.2, 0.5))
     elif name == 'ncf':
         # only supports MovieLens dataset because for other datasets user/item colums are indistinguishable
         assert isinstance(dataset, MovieLens20MDataset) or isinstance(dataset, MovieLens1MDataset)
@@ -83,21 +83,21 @@ def get_model(name, dataset):
                                             user_field_idx=dataset.user_field_idx,
                                             item_field_idx=dataset.item_field_idx)
     elif name == 'fnfm':
-        return FieldAwareNeuralFactorizationMachineModel(field_dims, embed_dim=4, mlp_dims=(64,), dropouts=(0.5, 0.5))
+        return FieldAwareNeuralFactorizationMachineModel(field_dims, embed_dim=4, mlp_dims=(64,), dropouts=(0.2, 0.2))
     elif name == 'dfm':
         return DeepFactorizationMachineModel(field_dims, embed_dim=16, mlp_dims=(100, 100), dropout=0.1)
     elif name == 'xdfm':
         return ExtremeDeepFactorizationMachineModel(
             field_dims, embed_dim=16, cross_layer_sizes=(16, 16), split_half=False, mlp_dims=(100, 100), dropout=0.5)
     elif name == 'afm':
-        return AttentionalFactorizationMachineModel(field_dims, embed_dim=16, attn_size=64, dropouts=(0.5, 0.5))
+        return AttentionalFactorizationMachineModel(field_dims, embed_dim=16, attn_size=16, dropouts=(0.2, 0.2))
     elif name == 'afi':
         return AutomaticFeatureInteractionModel(
-             field_dims, embed_dim=16, atten_embed_dim=64, num_heads=2, num_layers=2, mlp_dims=(100, 100), dropouts=(0.5, 0.5, 0.5))
+             field_dims, embed_dim=16, atten_embed_dim=64, num_heads=4, num_layers=2, mlp_dims=(100, 100), dropouts=(0.2, 0.5, 0.5))
     elif name == 'afn':
         print("Model:AFN")
         return AdaptiveFactorizationNetwork(
-            field_dims, embed_dim=16, LNN_dim=1500, mlp_dims=(100, 100), dropouts=(0.5, 0.5, 0.5))
+            field_dims, embed_dim=16, LNN_dim=800, mlp_dims=(100, 100), dropouts=(0.5, 0.5, 0.5))
     elif name == 'mhafm':
         print("Model:Multihead Attention Factorization Machine Model")
         return MultiheadAttentionalFactorizationMachineModel(
@@ -184,15 +184,17 @@ def main(dataset_name,
     valid_data_loader = DataLoader(valid_dataset, batch_size=batch_size, num_workers=8)
     test_data_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=8)
     
-    for seed in [0, 1994, 2020, 1019, 1125]:
+    for seed in [1019]:
         print(f'set the seed to: {seed}')
         np.random.seed(seed)
         torch.manual_seed(seed)
-        # for model_name in ['afm', 'nfm', 'ipnn', 'opnn', 'wd', 'dcn', 'dfm', 'xdfm', 'afi', 'afn']:
+        for model_name in ['lr', 'fm', 'afm']:
         # for model_name in ['lr', 'fm', 'afm', 'hofm', 'nfm', 'ipnn', 'opnn', 'wd', 'dcn', 'dfm', 'xdfm', 'afi', 'afn']:
-        for model_name in ['dfm']:
+        # for model_name in ['dcap']:
             print(f'model name: {model_name}')
-            model = get_model(model_name, dataset).to(device)
+            # for nhead in [1, 2, 4, 8, 16]:
+            #     for nlayer in [1, 2, 3, 4, 5]:
+            model = get_model(model_name, dataset, nhead=4, nlayer=2).to(device)
             print(model)
             criterion = torch.nn.BCELoss()
             optimizer = torch.optim.Adam(params=model.parameters(), lr=learning_rate, weight_decay=weight_decay)
